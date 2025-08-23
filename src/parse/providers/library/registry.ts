@@ -1,0 +1,141 @@
+
+// @ts-nocheck
+import ATInternetProvider from './ATInternet.js';
+import AdformProvider from './Adform.js';
+import AdobeAnalyticsProvider from './AdobeAnalytics.js';
+import AdobeAudienceManagerProvider from './AdobeAudienceManager.js';
+import AdobeDynamicTagManagerProvider from './AdobeDynamicTagManager.js';
+import AdobeExperienceIDProvider from './AdobeExperienceID.js';
+import AdobeHeartbeatProvider from './AdobeHeartbeat.js';
+import AdobeLaunchProvider from './AdobeLaunch.js';
+import AdobeLaunchCNProvider from './AdobeLaunchCN.js';
+import AdobeTargetProvider from './AdobeTarget.js';
+import AdobeWebSdkProvider from './AdobeWebSdk.js';
+import AmazonAdTagProvider from './AmazonAdTag.js';
+import AmplitudeProvider from './Amplitude.js';
+import BingAdsProvider from './BingAds.js';
+import BrazeProvider from './Braze.js';
+import BrevoProvider from './Brevo.js';
+import ComscoreProvider from './Comscore.js';
+import CrazyEggProvider from './CrazyEgg.js';
+import CriteoOneTagProvider from './CriteoOneTag.js';
+import DemandbaseEngagementProvider from './DemandbaseEngagement.js';
+import DynamicYieldProvider from './DynamicYield.js';
+import EnsightenManageProvider from './EnsightenManage.js';
+import EnsightenServerSideProvider from './EnsightenServerSide.js';
+import FacebookPixelProvider from './FacebookPixel.js';
+import FullStoryProvider from './FullStory.js';
+import GlassboxProvider from './Glassbox.js';
+import GoogleAdsProvider from './GoogleAds.js';
+import GoogleAnalyticsProvider from './GoogleAnalytics.js';
+import GoogleAnalytics4Provider from './GoogleAnalytics4.js';
+import GoogleDoubleClickProvider from './GoogleDoubleClick.js';
+import GoogleTagManagerProvider from './GoogleTagManager.js';
+import HotjarProvider from './Hotjar.js';
+import HubspotProvider from './Hubspot.js';
+import IndicativeProvider from './Indicative.js';
+import InvocaProvider from './Invoca.js';
+import LinkedInProvider from './LinkedIn.js';
+import LyticsProvider from './Lytics.js';
+import MatomoProvider from './Matomo.js';
+import MedalliaDXAProvider from './MedalliaDXA.js';
+import MerkleMerkuryProvider from './MerkleMerkury.js';
+import MicrosoftClarityProvider from './MicrosoftClarity.js';
+import MixpanelProvider from './Mixpanel.js';
+import MparticleProvider from './Mparticle.js';
+import OmniconvertProvider from './Omniconvert.js';
+import OptimizelyXProvider from './OptimizelyX.js';
+import OutbrainProvider from './Outbrain.js';
+import ParselyProvider from './Parsely.js';
+import PinterestProvider from './Pinterest.js';
+import PiwikPROProvider from './PiwikPRO.js';
+import PiwikPROTagManagerProvider from './PiwikPROTagManager.js';
+import RTBHouseProvider from './RTBHouse.js';
+import RedditPixelProvider from './RedditPixel.js';
+import RudderStackProvider from './RudderStack.js';
+import SegmentProvider from './Segment.js';
+import SeznamSklikProvider from './SeznamSklik.js';
+import SixSenseProvider from './SixSense.js';
+import SnapchatProvider from './Snapchat.js';
+import SojernProvider from './Sojern.js';
+import SpotifyPixelProvider from './SpotifyPixel.js';
+import TeadsProvider from './Teads.js';
+import TealiumEventStreamProvider from './TealiumEventStream.js';
+import TealiumIQProvider from './TealiumIQ.js';
+import TheTradeDeskUniversalProvider from './TheTradeDeskUniversal.js';
+import TikTokProvider from './TikTok.js';
+import TwitterProvider from './Twitter.js';
+import VibesProvider from './Vibes.js';
+import WebtrendsOnDemandProvider from './WebtrendsOnDemand.js';
+import ZemantaProvider from './Zemanta.js';
+
+export const providers = [
+  new ATInternetProvider(), // ATInternet.js
+  new AdformProvider(), // Adform.js
+  new AdobeAnalyticsProvider(), // AdobeAnalytics.js
+  new AdobeAudienceManagerProvider(), // AdobeAudienceManager.js
+  new AdobeDynamicTagManagerProvider(), // AdobeDynamicTagManager.js
+  new AdobeExperienceIDProvider(), // AdobeExperienceID.js
+  new AdobeHeartbeatProvider(), // AdobeHeartbeat.js
+  new AdobeLaunchProvider(), // AdobeLaunch.js
+  new AdobeLaunchCNProvider(), // AdobeLaunchCN.js
+  new AdobeTargetProvider(), // AdobeTarget.js
+  new AdobeWebSdkProvider(), // AdobeWebSdk.js
+  new AmazonAdTagProvider(), // AmazonAdTag.js
+  new AmplitudeProvider(), // Amplitude.js
+  new BingAdsProvider(), // BingAds.js
+  new BrazeProvider(), // Braze.js
+  new BrevoProvider(), // Brevo.js
+  new ComscoreProvider(), // Comscore.js
+  new CrazyEggProvider(), // CrazyEgg.js
+  new CriteoOneTagProvider(), // CriteoOneTag.js
+  new DemandbaseEngagementProvider(), // DemandbaseEngagement.js
+  new DynamicYieldProvider(), // DynamicYield.js
+  new EnsightenManageProvider(), // EnsightenManage.js
+  new EnsightenServerSideProvider(), // EnsightenServerSide.js
+  new FacebookPixelProvider(), // FacebookPixel.js
+  new FullStoryProvider(), // FullStory.js
+  new GlassboxProvider(), // Glassbox.js
+  new GoogleAdsProvider(), // GoogleAds.js
+  new GoogleAnalyticsProvider(), // GoogleAnalytics.js
+  new GoogleAnalytics4Provider(), // GoogleAnalytics4.js
+  new GoogleDoubleClickProvider(), // GoogleDoubleClick.js
+  new GoogleTagManagerProvider(), // GoogleTagManager.js
+  new HotjarProvider(), // Hotjar.js
+  new HubspotProvider(), // Hubspot.js
+  new IndicativeProvider(), // Indicative.js
+  new InvocaProvider(), // Invoca.js
+  new LinkedInProvider(), // LinkedIn.js
+  new LyticsProvider(), // Lytics.js
+  new MatomoProvider(), // Matomo.js
+  new MedalliaDXAProvider(), // MedalliaDXA.js
+  new MerkleMerkuryProvider(), // MerkleMerkury.js
+  new MicrosoftClarityProvider(), // MicrosoftClarity.js
+  new MixpanelProvider(), // Mixpanel.js
+  new MparticleProvider(), // Mparticle.js
+  new OmniconvertProvider(), // Omniconvert.js
+  new OptimizelyXProvider(), // OptimizelyX.js
+  new OutbrainProvider(), // Outbrain.js
+  new ParselyProvider(), // Parsely.js
+  new PinterestProvider(), // Pinterest.js
+  new PiwikPROProvider(), // PiwikPRO.js
+  new PiwikPROTagManagerProvider(), // PiwikPROTagManager.js
+  new RTBHouseProvider(), // RTBHouse.js
+  new RedditPixelProvider(), // RedditPixel.js
+  new RudderStackProvider(), // RudderStack.js
+  new SegmentProvider(), // Segment.js
+  new SeznamSklikProvider(), // SeznamSklik.js
+  new SixSenseProvider(), // SixSense.js
+  new SnapchatProvider(), // Snapchat.js
+  new SojernProvider(), // Sojern.js
+  new SpotifyPixelProvider(), // SpotifyPixel.js
+  new TeadsProvider(), // Teads.js
+  new TealiumEventStreamProvider(), // TealiumEventStream.js
+  new TealiumIQProvider(), // TealiumIQ.js
+  new TheTradeDeskUniversalProvider(), // TheTradeDeskUniversal.js
+  new TikTokProvider(), // TikTok.js
+  new TwitterProvider(), // Twitter.js
+  new VibesProvider(), // Vibes.js
+  new WebtrendsOnDemandProvider(), // WebtrendsOnDemand.js
+  new ZemantaProvider(), // Zemanta.js
+];

@@ -1,0 +1,34 @@
+{
+  "name": "auditor-service",
+  "version": "0.1.0",
+  "description": "Lightweight tracker audit API: per-URL scan with optOut/optIn crawls, auto-consent, third-party filtering, and minimal tracker parsing.",
+  "type": "module",
+  "main": "dist/server/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "tsx src/server/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "crawl:providers": "tsx scripts/crawl-providers.ts"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "puppeteer": "^24.7.1",
+    "tldts": "^7.0.4",
+    "zod": "^3.25.32",
+    "@duckduckgo/autoconsent": "^4.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.7.3",
+    "vitest": "^1.6.0"
+  }
+}
+
+
