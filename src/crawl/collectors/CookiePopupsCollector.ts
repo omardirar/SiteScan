@@ -116,7 +116,7 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
           disabledCmps: [],
           enablePrehide: false,
           enableCosmeticRules: true,
-          enableFilterList: false,
+          enableFilterList: true,
           enableHeuristicDetection: true,
           detectRetries: 20,
           isMainWorld: false,

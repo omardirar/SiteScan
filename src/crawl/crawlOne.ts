@@ -1,5 +1,4 @@
 import { launchBrowser } from './engine/browser.js';
-import { autoConsent } from './autoconsent/index.js';
 import { CookiePopupsCollector } from './collectors/CookiePopupsCollector.js';
 import type { CookiePopupsCollectorOptions } from './collectors/types.js';
 import { isThirdParty } from './thirdparty.js';
@@ -43,19 +42,20 @@ export async function crawlOne(targetUrl: string, mode: 'optIn' | 'optOut', auto
   try {
     const collectorOptions: CookiePopupsCollectorOptions = {
       autoconsentAction,
-      scrapeTimeoutMs: Number(process.env.AUTOCONSENT_SCRAPE_TIMEOUT_MS || 12000),
-      actionTimeoutMs: Number(process.env.AUTOCONSENT_ACTION_TIMEOUT_MS || 10000),
-      detectTimeoutMs: Number(process.env.AUTOCONSENT_DETECT_TIMEOUT_MS || 5000),
-      foundTimeoutMs: Number(process.env.AUTOCONSENT_FOUND_TIMEOUT_MS || 5000),
-      totalBudgetMs: Number(process.env.AUTOCONSENT_TOTAL_BUDGET_MS || 20000),
-      collectorExtraTimeMs: Number(process.env.COLLECTOR_EXTRA_TIME_MS || 4000),
+      scrapeTimeoutMs: Number(process.env.AUTOCONSENT_SCRAPE_TIMEOUT_MS || 20000),
+      actionTimeoutMs: Number(process.env.AUTOCONSENT_ACTION_TIMEOUT_MS || 30000),
+      detectTimeoutMs: Number(process.env.AUTOCONSENT_DETECT_TIMEOUT_MS || 8000),
+      foundTimeoutMs: Number(process.env.AUTOCONSENT_FOUND_TIMEOUT_MS || 8000),
+      totalBudgetMs: Number(process.env.AUTOCONSENT_TOTAL_BUDGET_MS || 35000),
+      collectorExtraTimeMs: Number(process.env.COLLECTOR_EXTRA_TIME_MS || 5000),
       shortTimeouts: false,
     };
     const cookieCollector = new CookiePopupsCollector(collectorOptions);
+    // Start collector as early as possible
+    await cookieCollector.start(page);
     await page.goto(targetUrl, { waitUntil: ['domcontentloaded', 'networkidle2'], timeout: NAV_TIMEOUT_MS });
     finalUrl = page.url();
-    await cookieCollector.start(page);
-    cookieBanner = await autoConsent(page, mode);
+    // Legacy autoconsent is removed; rely on CookiePopupsCollector for detection & action
     const collectorResultPromise = cookieCollector.awaitResult();
     await new Promise((r) => setTimeout(r, POST_CONSENT_WAIT_MS));
     const collectorResult = await Promise.race([
