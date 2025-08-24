@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalizeUrl } from '/Users/omar/Documents/GitHub/website-auditor/src/utils/url.js';
-import { sha1 } from '/Users/omar/Documents/GitHub/website-auditor/src/utils/hash.js';
+import { canonicalizeUrl } from '../../src/utils/url.js';
+import { sha1 } from '../../src/utils/hash.js';
 // The new analysis logic is in scan.ts, but it's not easily unit-testable as it's a large function.
 // The core logic is in buildNormalizedEventsAndTrackers, which is not exported.
 // For this test, I will focus on the exported utilities.

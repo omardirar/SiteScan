@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseRequests } from '/Users/omar/Documents/GitHub/website-auditor/src/analysis/parse/parser.js';
-import type { CrawlRequestRecord } from '/Users/omar/Documents/GitHub/website-auditor/src/schema/types.js';
+import { parseRequests } from '../../src/analysis/parse/parser.js';
+import type { CrawlRequestRecord } from '../../src/schema/types.js';
 
 const baseRequest: Omit<CrawlRequestRecord & { stage: 'preConsent' }, 'url'> = {
   method: 'GET',

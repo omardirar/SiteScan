@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as crawl from '/Users/omar/Documents/GitHub/website-auditor/src/analysis/crawl/crawlOne.js';
-import { runScan } from '/Users/omar/Documents/GitHub/website-auditor/src/analysis/scan.js';
-import { ApiResponseV1Schema } from '/Users/omar/Documents/GitHub/website-auditor/src/schema/validator.js';
+import * as crawl from '../../src/analysis/crawl/crawlOne.js';
+import { runScan } from '../../src/analysis/scan.js';
+import { ApiResponseV1Schema } from '../../src/schema/validator.js';
 
 describe('runScan edge cases', () => {
   it('unreachable URL crawl errors do not crash the scan', async () => {

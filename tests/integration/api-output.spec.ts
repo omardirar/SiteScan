@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as crawl from '/Users/omar/Documents/GitHub/website-auditor/src/analysis/crawl/crawlOne.js';
-import { runScan } from '/Users/omar/Documents/GitHub/website-auditor/src/analysis/scan.js';
-import { ApiResponseV1Schema } from '/Users/omar/Documents/GitHub/website-auditor/src/schema/validator.js';
-import type { CrawlOutput } from '/Users/omar/Documents/GitHub/website-auditor/src/schema/types.js';
+import * as crawl from '../../src/analysis/crawl/crawlOne.js';
+import { runScan } from '../../src/analysis/scan.js';
+import { ApiResponseV1Schema } from '../../src/schema/validator.js';
+import type { CrawlOutput } from '../../src/schema/types.js';
 
 function mkCrawlOut(url: string, mode: 'optIn' | 'optOut'): CrawlOutput {
   const isOptOut = mode === 'optOut';
@@ -35,7 +35,7 @@ describe('runScan output validation', () => {
   it('returns a valid ApiResponseV1 structure', async () => {
     vi.spyOn(crawl, 'crawlOne').mockImplementation(async (url: string, mode: 'optIn' | 'optOut') => mkCrawlOut(url, mode));
 
-    const out = await runScan('https://example.com', 'optOut');
+    const out = await runScan('https://example.com');
 
     // Validate against Zod schema
     const validation = ApiResponseV1Schema.safeParse(out);
