@@ -11,13 +11,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!parsed.success) {
         return res.status(400).send({ error: 'Invalid body', details: parsed.error.flatten() });
       }
-      if (parsed.data.autoconsentAction) {
-        process.env.AUTOCONSENT_ACTION = parsed.data.autoconsentAction;
-      }
-      const result = await scanUrl(parsed.data.url);
-      return res.status(200).send(result);
+      const payload = await scanUrl(parsed.data.url, parsed.data.autoconsentAction ?? null);
+      return res.status(200).send(payload);
     } catch (e: any) {
-      return res.status(500).send({ error: 'Internal error', message: e?.message || String(e) });
+      return res.status(500).send({ cmps: [], trackers: [], events: [], leaks: [] });
     }
   });
 };

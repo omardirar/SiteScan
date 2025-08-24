@@ -37,6 +37,8 @@ export async function crawlOne(targetUrl: string, mode: 'optIn' | 'optOut', auto
   let cookieBanner: CookieBanner = { detected: false, provider: null, action: null, error: null };
   let finalUrl: string | null = null;
   let cookiePopups: any | undefined = undefined;
+  let errorInfo: { code: 'timeout' | 'navigation' | 'autoconsent' | 'unknown'; message: string } | null = null;
+  let finishedAt: string = startedAt;
 
   try {
     const collectorOptions: CookiePopupsCollectorOptions = {
@@ -61,26 +63,32 @@ export async function crawlOne(targetUrl: string, mode: 'optIn' | 'optOut', auto
       new Promise<null>((resolve) => setTimeout(() => resolve(null), collectorOptions.totalBudgetMs + collectorOptions.collectorExtraTimeMs)),
     ]);
     cookiePopups = collectorResult === null ? undefined : collectorResult;
+  } catch (e: any) {
+    const message = e?.message || String(e);
+    const code: any = /Navigation Timeout|timeout/i.test(message) ? 'timeout' : /net::ERR|navigation|goto/i.test(message) ? 'navigation' : 'unknown';
+    errorInfo = { code, message };
   } finally {
-    const finishedAt = new Date().toISOString();
+    finishedAt = new Date().toISOString();
     await browser.close();
-    return {
-      version: '1.0.0',
-      url: targetUrl,
-      finalUrl,
-      mode,
-      thirdPartyOnly: true,
-      cookieBanner,
-      cookiePopups,
-      requests,
-      meta: {
-        startedAt,
-        finishedAt,
-        durationMs: Date.parse(finishedAt) - Date.parse(startedAt),
-        userAgent: 'auditor-service/0.1',
-      },
-    };
   }
+
+  return {
+    version: '1.0.0',
+    url: targetUrl,
+    finalUrl,
+    mode,
+    thirdPartyOnly: true,
+    cookieBanner,
+    cookiePopups,
+    requests,
+    meta: {
+      startedAt,
+      finishedAt,
+      durationMs: Date.parse(finishedAt) - Date.parse(startedAt),
+      userAgent: 'auditor-service/0.1',
+    },
+    error: errorInfo,
+  } as any;
 }
 
 

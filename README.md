@@ -40,9 +40,14 @@ Environment variables
 API
 `POST /scan` body: `{ url: string, autoconsentAction?: 'optIn' | 'optOut' }`.
 
-Output additions
-- `cookiePopups.cmps[]`: detected CMPs with action state, errors, matched patterns/snippets, filter-list match.
-- `cookiePopups.scrapedFrames[]`: per-frame cleaned text, actionable buttons, candidate popup elements.
+Response schema (default)
+`{ cmps: CMPInfo[], trackers: {name,key,type}[], events: AuditEvent[], leaks: AuditEvent[] }`
+
+Notes
+- `events` are deduped across opt-in/opt-out and include `seenInOptIn`/`seenInOptOut` flags.
+- `trackers` are normalized unique providers present in events.
+- `leaks` = events present only in opt-out.
+- Pass `?legacy=1` to receive a minimal legacy-compatible structure during migration.
 
 Leak semantics
 - A tag is considered leaked if it fires during the optOut crawl (regardless of optIn). Output contains `leakDetected` and unique `leakedTags` derived from optOut events.
