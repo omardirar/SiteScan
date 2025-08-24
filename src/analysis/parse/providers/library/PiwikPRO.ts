@@ -694,7 +694,7 @@ class PiwikPROProvider extends BaseProvider {
     results.push({
       key: 'requestType',
       value: requestType,
-      hidden: 'true',
+      hidden: true,
     });
 
     // Where the request was sent
