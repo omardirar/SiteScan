@@ -1,55 +1,62 @@
-Lightweight tracker audit API (TypeScript + Node) that scans a single URL twice (optOut and optIn), performs best-effort auto-consent, filters third-party requests by eTLD+1, parses trackers (core + ported rules), computes consent leak, and returns a JSON report.
+Website Auditor (API)
+
+A lightweight Node.js + TypeScript service that scans a single URL in a headless browser, performs staged consent actions, analyzes network traffic, detects trackers via a provider library, and returns a versioned JSON report.
+
+Key technologies: Fastify, Puppeteer, Zod, Vitest, ESLint/Prettier.
 
 Quick start
-1) Install deps
-   npm i
-
-2) Dev server
-   npm run dev
-
-3) Scan
-   curl -s localhost:3000/scan -H 'content-type: application/json' -d '{"url":"https://example.com"}'
-
-Design
-- Fastify + zod route validation
-- Puppeteer crawler (Chromium flags suitable for Cloud Run)
-- eTLD+1 filtering via tldts
-- Provider registry includes core and ported detectors:
-  - Core: `gtm`, `ga4`, `meta` (Meta Pixel), `tiktok`
-  - Ported: `googleads` (Google Ads), `ua` (Universal Analytics), `facebook` (Facebook Pixel), `linkedin` (LinkedIn Conversion), `binguet` (Bing Ads)
-- External providers bridge: optionally loads additional detector stubs from repo-root `providers/` via `EXTERNAL_PROVIDERS_DIR`
-
-Auto-consent
-- CMP handlers: OneTrust, Cookiebot, Didomi, Quantcast, Sourcepoint, TrustArc, Usercentrics, plus a generic heuristic fallback
-- Orchestrator retries with small backoff to allow dynamic banners to render
-
-Autoconsent Cookie Popups Collector
-- Per-frame isolated world injection of `@duckduckgo/autoconsent` with a CDP Runtime binding bridge.
-- Full message protocol handling: `init`, `cmpDetected`, `popupFound`, `report`, `optOutResult`, `optInResult`, `autoconsentDone`, `selfTestResult`, `eval`, `autoconsentError`.
-- Configurable autoconsent action and time budgets.
-
-Environment variables
-- `AUTOCONSENT_ACTION` = `optIn` | `optOut` (optional)
-- `AUTOCONSENT_SCRAPE_TIMEOUT_MS` (default 12000)
-- `AUTOCONSENT_ACTION_TIMEOUT_MS` (default 10000)
-- `AUTOCONSENT_DETECT_TIMEOUT_MS` (default 5000)
-- `AUTOCONSENT_FOUND_TIMEOUT_MS` (default 5000)
-- `AUTOCONSENT_TOTAL_BUDGET_MS` (default 20000)
-- `COLLECTOR_EXTRA_TIME_MS` (default 4000)
+- Install: `npm i`
+- Dev server: `npm run dev` (listens on :3000)
+- Call API:
+```bash
+curl -s localhost:3000/scan -H 'content-type: application/json' \
+  -d '{"url":"https://example.com"}' | jq '.'
+```
 
 API
-`POST /scan` body: `{ url: string, autoconsentAction?: 'optIn' | 'optOut' }`.
+POST /scan body: { url: string }
+- Response is ApiResponseV1 with schemaVersion "1.0". See `src/schema/types.ts`.
 
-Output additions
-- `cookiePopups.cmps[]`: detected CMPs with action state, errors, matched patterns/snippets, filter-list match.
-- `cookiePopups.scrapedFrames[]`: per-frame cleaned text, actionable buttons, candidate popup elements.
+What the system does
+- Crawl twice with Puppeteer: optOut and optIn (autoconsent controlled internally).
+- Capture all requests; annotate each with a timestamp.
+- Partition requests into stages (preConsent, afterOptOut, afterOptIn) by action timestamp.
+- Parse network URLs with a provider detector library into TrackerEvents.
+- Normalize and dedupe into AuditEvents; compute leaks (events seen after opt-out).
+- Include CMPs found by the autoconsent collector.
 
-Leak semantics
-- A tag is considered leaked if it fires during the optOut crawl (regardless of optIn). Output contains `leakDetected` and unique `leakedTags` derived from optOut events.
+Conceptual architecture
+- Server: `src/app` (Fastify route `src/app/routes/scan.ts` validates input and calls runScan)
+- Analysis: `src/analysis/scan.ts` orchestrates two crawls, staging, parsing, normalization, summary
+- Crawl: `src/analysis/crawl` (Puppeteer launch and per-run logic). Consent collector integrates DuckDuckGo autoconsent via CDP isolated worlds
+- Parsing: `src/analysis/parse` (detector registry; converts URLs to TrackerEvents)
+- Schema: `src/schema` (types and Zod validators)
+- Utils: `src/utils` (hashing, URL canonicalization)
 
-Cloud Run tips
-- Concurrency: 1
-- Memory: 1024–2048 MiB
-- Flags: --no-sandbox --disable-dev-shm-usage --disable-gpu --no-zygote
+Data flow in short
+1) /scan → runScan(url)
+2) runScan → Promise.all(crawlOne(url, 'optOut'), crawlOne(url, 'optIn'))
+3) Each crawl collects requests and CMP results; actionTimestamp records consent time
+4) Partition requests by stage
+5) Parse requests → TrackerEvents → merge to AuditEvents (stable hash)
+6) Build trackers, leaks, checklist, summary
+
+Testing
+- Run tests: `npm test`
+- Tests include unit and integration with mocked crawl outputs
+
+Linting / Typechecking / Build
+- Lint: `npm run lint`
+- Typecheck: `npm run typecheck`
+- Build: `npm run build`
+
+CI
+- GitHub Actions workflow `.github/workflows/ci.yml` runs install, lint, typecheck, build, and tests on PRs and pushes.
+
+Notes
+- The service captures all requests (not just third-party)
+- CMP detection leverages DuckDuckGo autoconsent; injection is done in an isolated world using CDP
+- Event dedupe hash is based on provider key + canonicalized URL parts
+- See inline TODOs (e.g., in `src/analysis/scan.ts`) for future improvements (logger, timings, structure)
 
 

@@ -1,35 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { parseRequests } from '../../src/parse/parser.js';
-import type { CrawlOutput } from '../../src/core/model/types.js';
+import { parseRequests } from '../../src/analysis/parse/parser.js';
+import type { CrawlRequestRecord } from '../../src/schema/types.js';
 
-const baseCrawl: Omit<CrawlOutput, 'requests'> = {
-  version: '1.0.0',
-  url: 'https://example.com',
-  finalUrl: 'https://example.com',
-  mode: 'optOut',
-  thirdPartyOnly: true,
-  cookieBanner: { detected: false, provider: null, action: null, error: null },
-  meta: { startedAt: new Date().toISOString(), finishedAt: new Date().toISOString() },
+const baseRequest: Omit<CrawlRequestRecord & { stage: 'preConsent' }, 'url'> = {
+  method: 'GET',
+  stage: 'preConsent',
+  timestamp: Date.now(),
 };
 
 describe('parseRequests', () => {
   it('returns empty with no requests', () => {
-    const crawl: CrawlOutput = { ...baseCrawl, requests: [] };
-    expect(parseRequests(crawl)).toEqual([]);
+    expect(parseRequests([])).toEqual([]);
   });
 
-  it('detects GA4', () => {
-    const crawl: CrawlOutput = { ...baseCrawl, requests: [ { url: 'https://www.google-analytics.com/g/collect?v=2', method: 'GET' } ] };
-    const events = parseRequests(crawl);
-    expect(events.some(e => e.providerKey === 'GOOGLEANALYTICS4')).toBe(true);
-  });
-
-  it('dedupes by provider+url', () => {
-    const url = 'https://www.googletagmanager.com/gtm.js?id=GTM-ABC';
-    const crawl: CrawlOutput = { ...baseCrawl, requests: [ { url, method: 'GET' }, { url, method: 'GET' } ] };
-    const events = parseRequests(crawl);
-    const gtmEvents = events.filter(e => e.providerKey === 'GOOGLETAGMAN');
-    expect(gtmEvents.length).toBe(1);
+  it('detects GTM via /gtm.js', () => {
+    const requests = [{ ...baseRequest, url: 'https://www.googletagmanager.com/gtm.js?id=GTM-XYZ' }];
+    const events = parseRequests(requests);
+    expect(events.some(e => e.providerKey === 'GOOGLETAGMAN')).toBe(true);
   });
 });
 
