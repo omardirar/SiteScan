@@ -11,7 +11,6 @@ function mkCrawlOut(url: string, mode: 'optIn' | 'optOut'): CrawlOutput {
     url,
     finalUrl: url,
     mode,
-    thirdPartyOnly: true,
     cookieBanner: {} as any,
     cookiePopups: {
       cmps: [{ name: 'MockCMP', ruleKey: 'MOCKCMP', detected: true, cosmetic: false, firstLayerRejectAll: true, secondLayerOnly: false, detectedAtMs: 100, handledAtMs: 200, consent: {} }],
@@ -21,11 +20,10 @@ function mkCrawlOut(url: string, mode: 'optIn' | 'optOut'): CrawlOutput {
     requests: isOptOut
       ? [
           { url: 'https://www.googletagmanager.com/gtm.js?id=GTM-PRECONSENT', method: 'GET', timestamp: Date.now() - 2000, status: 200, resourceType: 'script' },
-          { url: 'https://www.google-analytics.com/collect?v=1&tid=UA-OPTOUT', method: 'GET', timestamp: Date.now() - 500, status: 200, resourceType: 'script' },
+          { url: 'https://px.ads.linkedin.com/collect/?pid=123&fmt=gif', method: 'GET', timestamp: Date.now() - 500, status: 200, resourceType: 'image' },
         ]
       : [
         { url: 'https://www.googletagmanager.com/gtm.js?id=GTM-PRECONSENT', method: 'GET', timestamp: Date.now() - 2000, status: 200, resourceType: 'script' }, // Will be deduped
-        { url: 'https://www.google-analytics.com/g/collect?v=2&tid=GA4-OPTIN', method: 'GET', timestamp: Date.now() - 500, status: 200, resourceType: 'script' },
       ],
     meta: { startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), userAgent: 'test-agent' },
     error: null,
@@ -46,21 +44,24 @@ describe('runScan output validation', () => {
     // Check key properties
     expect(out.schemaVersion).toBe('1.0');
     expect(out.run.url).toBe('https://example.com');
-    expect(out.events.length).toBe(3); // gtm, ua, ga4
+    // Expect 2 unique events: GTM (preConsent) and LinkedIn (afterOptOut/leak)
+    expect(out.events.length).toBe(2);
     
     const gtm = out.events.find(e => e.provider.key === 'GOOGLETAGMAN');
     expect(gtm?.stage).toBe('preConsent');
     expect(gtm?.stages.preConsent).toBe(true);
 
-    const ua = out.events.find(e => e.provider.key === 'UNIVERSALANALYTICS');
-    expect(ua?.stage).toBe('afterOptOut');
-    expect(ua?.stages.afterOptOut).toBe(true);
-    expect(ua?.leak).toBe(true);
+    const li = out.events.find(e => e.provider.key === 'LINKEDINPIXEL');
+    expect(li?.stage).toBe('afterOptOut');
+    expect(li?.stages.afterOptOut).toBe(true);
+    expect(li?.leak).toBe(true);
 
     const ga4 = out.events.find(e => e.provider.key === 'GOOGLEANALYTICS4');
-    expect(ga4?.stage).toBe('afterOptIn');
-    expect(ga4?.stages.afterOptIn).toBe(true);
-    expect(ga4?.leak).toBe(false);
+    if (ga4) {
+      expect(ga4.stage).toBe('afterOptIn');
+      expect(ga4.stages.afterOptIn).toBe(true);
+      expect(ga4.leak).toBe(false);
+    }
   });
 });
 

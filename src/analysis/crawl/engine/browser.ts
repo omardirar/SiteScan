@@ -9,6 +9,7 @@ export async function launchBrowser(): Promise<Browser> {
     '--disable-features=site-per-process',
     '--no-zygote',
   ];
+  // TODO: Allow overriding args/headless via env for debugging (e.g., HEADFUL=1)
   const browser = await puppeteer.launch({ args, headless: 'new' as any });
   return browser;
 }

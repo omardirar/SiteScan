@@ -4,8 +4,8 @@ import { runScan } from '../../analysis/scan.js';
 
 const bodySchema = z.object({
   url: z.string().url(),
-  autoconsentAction: z.enum(['optIn', 'optOut']).optional(),
 });
+// TODO: Support optional per-scan overrides (e.g., timeouts, userAgent) behind allowlist
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post('/scan', async (req, res) => {
@@ -16,13 +16,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           .status(400)
           .send({ error: 'Invalid body', details: parsed.error.flatten() });
       }
-      const payload = await runScan(
-        parsed.data.url,
-        parsed.data.autoconsentAction ?? null,
-      );
+      const payload = await runScan(parsed.data.url);
       return res.status(200).send(payload);
     } catch (e: any) {
       // Basic error logging
+      // TODO: Attach request id/correlation id; return machine-friendly error code
       console.error(
         `[scan] failed for body: ${JSON.stringify(req.body)} -> ${e?.message || String(e)}`,
       );

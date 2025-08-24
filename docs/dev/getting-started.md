@@ -1,36 +1,39 @@
-# Getting Started (Dev)
+# Getting Started
 
-## Prerequisites
+Prereqs
 - Node.js >= 18
-- Chrome dependencies (Linux containers): `--no-sandbox` recommended for Cloud Run
 
-## Install & Run
+Install & Run
 ```bash
 npm i
 npm run dev
 # server on :3000
 ```
 
-## Build & Start
+Build & Start
 ```bash
 npm run build
 npm start
 ```
 
-## Tests
+Tests
 ```bash
 npm test
 npm run typecheck
 ```
 
-## Handy Commands
-- Kill old dev server on port 3000:
+Lint/Format
 ```bash
-lsof -nP -iTCP:3000 -sTCP:LISTEN -t | xargs -r kill
+npm run lint
+npm run format
 ```
 
-- Sample API call:
+Sample API call
 ```bash
 curl -s localhost:3000/scan -H 'content-type: application/json' \
-  -d '{"url":"https://example.com","autoconsentAction":"optOut"}' | jq '{cmps:(.cmps|length), trackers:(.trackers|length), events:(.events|length), leaks:(.leaks|length)}'
+  -d '{"url":"https://example.com"}' | jq '{cmps:(.cmps|length), trackers:(.trackers|length), events:(.events|length), leaks:(.leaks|length)}'
 ```
+
+Notes
+- Configure timeouts via environment variables; see `docs/config/timeouts.md`.
+- For CI, see `.github/workflows/ci.yml`.

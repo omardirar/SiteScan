@@ -19,6 +19,7 @@ export function canonicalizeUrl(urlStr: string): {
     };
   } catch {
     // Fallback for invalid URLs
+    // TODO: Consider stricter handling/logging for invalid URLs upstream
     const [path, query] = urlStr.split('?');
     return {
       host: '',

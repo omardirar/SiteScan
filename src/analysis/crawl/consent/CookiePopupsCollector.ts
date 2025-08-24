@@ -34,8 +34,15 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
   private page!: Page;
   private options: CookiePopupsCollectorOptions;
   private bindingName!: string;
+  private client!: CDPSession;
+  // TODO: Consider encapsulating context/session bookkeeping in a dedicated helper to simplify this class
   private cdpSessionsByContext = new Map<string, CDPSession>();
   private pageWorldByContext = new Map<string, string>();
+  private uniqueIdToContextId = new Map<string, number>();
+  private pageWorldContextIdByUniqueId = new Map<string, number>();
+  private uniqueIdToFrameId = new Map<string, string>();
+  private frameIdToMainContextId = new Map<string, number>();
+  private frameIdToIsoContextId = new Map<string, number>();
   private receivedMsgs: any[] = [];
   private scrapeJobDeferred: Deferred<ScrapedFrame[]> =
     createDeferred<ScrapedFrame[]>();
@@ -53,6 +60,7 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
     this.page = page;
     this.startTs = Date.now();
     const client = await page.target().createCDPSession();
+    this.client = client;
     await client.send('Page.enable');
     await client.send('Runtime.enable');
 
@@ -65,8 +73,12 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
       try {
         if (evt.name !== this.bindingName) return;
         const msg = JSON.parse(evt.payload);
-        const uniqueId = this.execIdToUniqueId.get(evt.executionContextId);
-        if (uniqueId) msg.executionContextUniqueId = uniqueId;
+        // Prefer provided uniqueId from message; fallback to mapping by exec id
+        const uniqueIdFromExec = this.execIdToUniqueId.get(
+          evt.executionContextId,
+        );
+        if (!msg.executionContextUniqueId && uniqueIdFromExec)
+          msg.executionContextUniqueId = uniqueIdFromExec;
         await this.handleMessage(msg);
       } catch {
         // ignore
@@ -77,29 +89,109 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
     client.on('Runtime.executionContextCreated', async (evt: any) => {
       const ctx = evt.context;
       if (!ctx || !ctx.uniqueId) return;
+      const frameId = ctx?.auxData?.frameId as string | undefined;
       if (typeof ctx.id === 'number')
         this.execIdToUniqueId.set(ctx.id, ctx.uniqueId);
+      if (typeof ctx.id === 'number')
+        this.uniqueIdToContextId.set(ctx.uniqueId, ctx.id);
+      if (frameId) this.uniqueIdToFrameId.set(ctx.uniqueId, frameId);
       // track main-world uniqueId for eval messages
       if (ctx.auxData && ctx.auxData.type === 'default') {
         this.pageWorldByContext.set(ctx.uniqueId, ctx.uniqueId);
+        if (typeof ctx.id === 'number') {
+          this.pageWorldContextIdByUniqueId.set(ctx.uniqueId, ctx.id);
+        }
+        if (frameId && typeof ctx.id === 'number') {
+          this.frameIdToMainContextId.set(frameId, ctx.id);
+        }
       }
-      // when our isolated world is created, evaluate the content script inside it and register session mapping
+      // when our isolated world is created, record session and evaluate the content script inside it
       if (ctx.name === WORLD_NAME) {
-        try {
-          const injected = buildInjectedSource(this.bindingName);
-          await client.send('Runtime.evaluate', {
-            expression: injected,
-            uniqueContextId: ctx.uniqueId,
-            includeCommandLineAPI: false,
-            returnByValue: false,
-          } as any);
-          this.cdpSessionsByContext.set(ctx.uniqueId, client);
-        } catch (e: any) {
+        // record mapping early so scraping/evals can still run even if injection races
+        this.cdpSessionsByContext.set(ctx.uniqueId, client);
+        if (frameId && typeof ctx.id === 'number') {
+          this.frameIdToIsoContextId.set(frameId, ctx.id);
+        }
+        // attempt injection with small retries to avoid race with context availability
+        const injected = buildInjectedSource(this.bindingName);
+        const tryInject = async () => {
+          const attempts = 5;
+          for (let i = 0; i < attempts; i++) {
+            try {
+              await client.send('Runtime.evaluate', {
+                expression: injected,
+                contextId: typeof ctx.id === 'number' ? ctx.id : undefined,
+                uniqueContextId:
+                  typeof ctx.id === 'number' ? undefined : ctx.uniqueId,
+                includeCommandLineAPI: false,
+                returnByValue: false,
+              } as any);
+              return true;
+            } catch (_err) {
+              await new Promise((r) => setTimeout(r, 50));
+            }
+          }
+          return false;
+        };
+        const ok = await tryInject();
+        if (!ok) {
           this.errors.push(
-            `Injection error in ctx ${ctx.uniqueId}: ${e?.message || String(e)}`,
+            `Injection error in ctx ${ctx.uniqueId}: Cannot find context after retries`,
           );
         }
       }
+    });
+
+    // Ensure isolated worlds exist for all frames as they appear or navigate
+    client.on('Page.frameAttached', async (evt: any) => {
+      try {
+        if (evt && evt.frameId) {
+          await createIsolatedWorld(client as any, evt.frameId, WORLD_NAME);
+        }
+      } catch (e: any) {
+        this.errors.push(
+          `Frame attach isolated world failed: ${e?.message || String(e)}`,
+        );
+      }
+    });
+    client.on('Page.frameNavigated', async (evt: any) => {
+      try {
+        const fid = evt && evt.frame && evt.frame.id;
+        if (fid) await createIsolatedWorld(client as any, fid, WORLD_NAME);
+      } catch (e: any) {
+        this.errors.push(
+          `Frame navigate isolated world failed: ${e?.message || String(e)}`,
+        );
+      }
+    });
+
+    // Clean up mappings when contexts/frames are destroyed, and rebuild when needed
+    client.on('Runtime.executionContextDestroyed', (evt: any) => {
+      const id = evt && evt.executionContextId;
+      if (typeof id !== 'number') return;
+      const uniqueId = this.execIdToUniqueId.get(id);
+      if (!uniqueId) return;
+      this.execIdToUniqueId.delete(id);
+      this.cdpSessionsByContext.delete(uniqueId);
+      this.pageWorldByContext.delete(uniqueId);
+      this.pageWorldContextIdByUniqueId.delete(uniqueId);
+      this.uniqueIdToContextId.delete(uniqueId);
+      this.uniqueIdToFrameId.delete(uniqueId);
+      // Keep frame->context maps until frameDestroyed; they will be repopulated on new contexts
+    });
+    client.on('Runtime.executionContextsCleared', () => {
+      this.cdpSessionsByContext.clear();
+      this.pageWorldByContext.clear();
+      this.pageWorldContextIdByUniqueId.clear();
+      this.uniqueIdToContextId.clear();
+      this.uniqueIdToFrameId.clear();
+      // frameIdToMain/Iso will be rebuilt on subsequent created events
+    });
+    client.on('Page.frameDetached', (evt: any) => {
+      const fid = evt && evt.frameId;
+      if (!fid) return;
+      this.frameIdToMainContextId.delete(fid);
+      this.frameIdToIsoContextId.delete(fid);
     });
 
     // Create isolated world and inject into all frames via CDP frame tree (stable frame IDs)
@@ -150,7 +242,9 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
         } as const;
         await this.evaluateInIsolated(
           msg.executionContextUniqueId,
-          `autoconsentReceiveMessage({ type: "initResp", config: ${JSON.stringify(config)} })`,
+          `autoconsentReceiveMessage({ type: "initResp", config: ${JSON.stringify(
+            config,
+          )} })`,
         );
         break;
       }
@@ -159,7 +253,9 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
           await this.scrapeJobDeferred.promise;
           await this.evaluateInIsolated(
             msg.executionContextUniqueId,
-            `autoconsentReceiveMessage({ type: ${JSON.stringify(this.options.autoconsentAction)} })`,
+            `autoconsentReceiveMessage({ type: ${JSON.stringify(
+              this.options.autoconsentAction,
+            )} })`,
           );
         }
         break;
@@ -180,7 +276,7 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
         if (this.selfTestFrame) {
           await this.evaluateInIsolated(
             this.selfTestFrame,
-            `autoconsentReceiveMessage({ type: "selfTest" })`,
+            'autoconsentReceiveMessage({ type: "selfTest" })',
           );
         }
         break;
@@ -192,21 +288,53 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
         if (!session) break;
         let ok = false;
         try {
-          const res = await session.send('Runtime.evaluate', {
-            expression: msg.code,
-            returnByValue: true,
-            allowUnsafeEvalBlockedByCSP: true,
-            uniqueContextId: this.pageWorldByContext.get(
+          // Try by uniqueContextId first
+          let res: any | undefined;
+          try {
+            res = await session.send('Runtime.evaluate', {
+              expression: msg.code,
+              returnByValue: true,
+              allowUnsafeEvalBlockedByCSP: true,
+              uniqueContextId: msg.executionContextUniqueId,
+            } as any);
+          } catch (_firstErr) {
+            const frameId = this.uniqueIdToFrameId.get(
               msg.executionContextUniqueId,
-            ),
-          } as any);
-          if (!res.exceptionDetails) ok = Boolean(res.result?.value);
-        } catch {
+            );
+            // Try main-world first, then isolated world numeric ids
+            const mainCtx = frameId
+              ? this.frameIdToMainContextId.get(frameId)
+              : this.pageWorldContextIdByUniqueId.get(
+                  msg.executionContextUniqueId,
+                );
+            const isoCtx = frameId
+              ? this.frameIdToIsoContextId.get(frameId)
+              : this.uniqueIdToContextId.get(msg.executionContextUniqueId);
+            if (typeof mainCtx === 'number') {
+              res = await session.send('Runtime.evaluate', {
+                expression: msg.code,
+                returnByValue: true,
+                allowUnsafeEvalBlockedByCSP: true,
+                contextId: mainCtx,
+              } as any);
+            } else if (typeof isoCtx === 'number') {
+              res = await session.send('Runtime.evaluate', {
+                expression: msg.code,
+                returnByValue: true,
+                allowUnsafeEvalBlockedByCSP: true,
+                contextId: isoCtx,
+              } as any);
+            }
+          }
+          if (res && !res.exceptionDetails) ok = Boolean(res.result?.value);
+        } catch (_e) {
           ok = false;
         }
         await this.evaluateInIsolated(
           msg.executionContextUniqueId,
-          `autoconsentReceiveMessage({ id: ${JSON.stringify(msg.id)}, type: "evalResp", result: ${JSON.stringify(ok)} })`,
+          `autoconsentReceiveMessage({ id: ${JSON.stringify(
+            msg.id,
+          )}, type: "evalResp", result: ${JSON.stringify(ok)} })`,
         );
         break;
       }
@@ -231,8 +359,40 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
         uniqueContextId: executionContextUniqueId,
         allowUnsafeEvalBlockedByCSP: true,
       } as any);
+    } catch (_e) {
+      // Try to rebuild context for the frame then retry with numeric id
+      const frameId = this.uniqueIdToFrameId.get(executionContextUniqueId);
+      if (frameId) {
+        await this.ensureIsolatedContextForFrame(frameId);
+        const contextId = this.frameIdToIsoContextId.get(frameId);
+        if (typeof contextId === 'number') {
+          try {
+            await session.send('Runtime.evaluate', {
+              expression,
+              contextId,
+              allowUnsafeEvalBlockedByCSP: true,
+            } as any);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+  }
+
+  private async ensureIsolatedContextForFrame(
+    frameId: string,
+    timeoutMs = 1500,
+  ) {
+    try {
+      await createIsolatedWorld(this.client as any, frameId, WORLD_NAME);
     } catch {
-      // ignore
+      // best-effort
+    }
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (typeof this.frameIdToIsoContextId.get(frameId) === 'number') return;
+      await new Promise((r) => setTimeout(r, 50));
     }
   }
 
@@ -263,12 +423,39 @@ export class CookiePopupsCollector implements Collector<CookiePopupsResult> {
     const tasks = Array.from(this.cdpSessionsByContext.entries()).map(
       async ([ctx, session]) => {
         try {
-          const evalRes = await session.send('Runtime.evaluate', {
-            expression: `(${SCRAPE_SCRIPT})();`,
-            uniqueContextId: ctx,
-            returnByValue: true,
-            allowUnsafeEvalBlockedByCSP: true,
-          } as any);
+          let evalRes: any;
+          try {
+            evalRes = await session.send('Runtime.evaluate', {
+              expression: `(${SCRAPE_SCRIPT})();`,
+              uniqueContextId: ctx,
+              returnByValue: true,
+              allowUnsafeEvalBlockedByCSP: true,
+            } as any);
+          } catch (_innerErr) {
+            // Fallback to numeric context id if available
+            const frameId = this.uniqueIdToFrameId.get(ctx);
+            if (frameId) {
+              await this.ensureIsolatedContextForFrame(frameId);
+              const contextId =
+                this.frameIdToIsoContextId.get(frameId) ??
+                this.uniqueIdToContextId.get(ctx);
+              evalRes = await session.send('Runtime.evaluate', {
+                expression: `(${SCRAPE_SCRIPT})();`,
+                contextId,
+                returnByValue: true,
+                allowUnsafeEvalBlockedByCSP: true,
+              } as any);
+            } else {
+              // last resort try with whatever numeric mapping we have
+              const contextId = this.uniqueIdToContextId.get(ctx);
+              evalRes = await session.send('Runtime.evaluate', {
+                expression: `(${SCRAPE_SCRIPT})();`,
+                contextId,
+                returnByValue: true,
+                allowUnsafeEvalBlockedByCSP: true,
+              } as any);
+            }
+          }
           if (evalRes && evalRes.exceptionDetails) return null;
           const value = evalRes.result?.value as ScrapedFrame;
           if (!value) return null;
@@ -593,7 +780,9 @@ const SCRAPE_SCRIPT = (function SCRAPE_SCRIPT_FACTORY() {
       }
       if (specificity.ids && tagName !== 'body') {
         if (element.getAttribute('id')) {
-          localSelector += `#${(window as any).CSS.escape(element.getAttribute('id'))}`;
+          localSelector += `#${(window as any).CSS.escape(
+            element.getAttribute('id'),
+          )}`;
         } else if (!element.hasAttribute('id')) {
           localSelector += `:not([id])`;
         }
@@ -612,13 +801,17 @@ const SCRAPE_SCRIPT = (function SCRAPE_SCRIPT_FACTORY() {
       } else if (specificity.testid) {
         const testid = element.getAttribute('data-testid');
         if (testid) {
-          localSelector += `[data-testid="${(window as any).CSS.escape(testid)}"]`;
+          localSelector += `[data-testid="${(window as any).CSS.escape(
+            testid,
+          )}"]`;
         }
       }
       if (specificity.classes && element.classList instanceof DOMTokenList) {
         const classes = Array.from(element.classList);
         if (classes.length > 0) {
-          localSelector += `.${classes.map((c) => (window as any).CSS.escape(c)).join('.')}`;
+          localSelector += `.${classes
+            .map((c) => (window as any).CSS.escape(c))
+            .join('.')}`;
         }
       }
       result = localSelector + (result ? ' > ' + result : '');

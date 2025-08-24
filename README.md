@@ -1,67 +1,62 @@
-Lightweight tracker audit API (TypeScript + Node) that scans a single URL, performs best-effort auto-consent, stages network requests, parses trackers, computes consent leakage, and returns a versioned JSON report.
+Website Auditor (API)
 
-## Quick start
-1) Install deps
-   `npm i`
+A lightweight Node.js + TypeScript service that scans a single URL in a headless browser, performs staged consent actions, analyzes network traffic, detects trackers via a provider library, and returns a versioned JSON report.
 
-2) Dev server
-   `npm run dev`
+Key technologies: Fastify, Puppeteer, Zod, Vitest, ESLint/Prettier.
 
-3) Scan
-   `curl -s localhost:3000/scan -H 'content-type: application/json' -d '{"url":"https://example.com"}'`
-
-## Features
-- **Staged Crawl**: Captures network requests during pre-consent, after opt-out, and after opt-in stages.
-- **CMP Automation**: Uses `@duckduckgo/autoconsent` to detect and interact with common CMPs.
-- **Event Normalization**: Parses requests from a library of provider definitions into structured `AuditEvent` objects.
-- **Deduplication**: Events are deduped across stages using a stable hash for accurate analysis.
-- **Leak Detection**: Identifies trackers that fire after an opt-out action.
-- **Versioning**: API responses follow a versioned schema (`v1.0`) for predictable contracts.
-
-## API
-
-`POST /scan` body: `{ "url": string, "autoconsentAction"?: "optIn" | "optOut" }`
-
-### Response Schema (`schemaVersion: "1.0"`)
-The API returns a single object containing detailed information about the scan. See `src/schema/types.ts` for the full `ApiResponseV1` interface.
-
-```json
-{
-  "schemaVersion": "1.0",
-  "run": {
-    "id": "e8a7e3c0-3b0f-4b1e-9e0a-1b1e3e8a7e3c",
-    "url": "https://example.com/",
-    "normalizedUrl": "https://www.example.com/",
-    "domain": "example.com",
-    "locale": "EU",
-    "jurisdiction": "GDPR",
-    "userAgent": "Mozilla/5.0...",
-    "viewport": { "width": 1366, "height": 768 },
-    "gpcEnabled": false
-  },
-  "summary": {
-    "verdict": "fail",
-    "reasons": ["Leaking vendors detected after opt-out"],
-    "totals": { "events": 3, "providers": 2, "preConsent": 1, "afterOptOut": 1, "afterOptIn": 1, "leaks": 1 },
-    "timingsMs": { /* ... */ }
-  },
-  "cmps": [ /* ... */ ],
-  "trackers": [ { "name": "Google Analytics 4", "key": "GA4", "type": "Analytics" } /* ... */ ],
-  "events": [ { /* ... AuditEvent object ... */ } ],
-  "leaks": [ { /* ... AuditEvent object where leak=true ... */ } ],
-  "checklist": { /* ... Staged checklist for reporting ... */ }
-}
+Quick start
+- Install: `npm i`
+- Dev server: `npm run dev` (listens on :3000)
+- Call API:
+```bash
+curl -s localhost:3000/scan -H 'content-type: application/json' \
+  -d '{"url":"https://example.com"}' | jq '.'
 ```
 
-### Semantics
-- **Verdict**: The `summary.verdict` can be `pass`, `warn`, or `fail` based on rule violations (e.g., pre-consent tracking, leaks).
-- **Staging**: `events` are tagged with the `stage` (`preConsent`, `afterOptOut`, `afterOptIn`) in which they were first observed. The `stages` object indicates all stages in which the event was present.
-- **Deduplication**: Events are deduped by a hash of `provider.key | host | path | sortedQueryString`.
+API
+POST /scan body: { url: string }
+- Response is ApiResponseV1 with schemaVersion "1.0". See `src/schema/types.ts`.
 
-## Development
-- **Structure**: The project is organized into `src/app` (server), `src/analysis` (core logic), `src/schema` (types/validators), and `src/utils`.
-- **Testing**: Run tests with `npm test`. Integration and unit tests are located in `tests/`.
-- **Linting**: Run `npm run lint` to check for code style issues.
-- **Building**: Run `npm run build` to compile the TypeScript source.
+What the system does
+- Crawl twice with Puppeteer: optOut and optIn (autoconsent controlled internally).
+- Capture all requests; annotate each with a timestamp.
+- Partition requests into stages (preConsent, afterOptOut, afterOptIn) by action timestamp.
+- Parse network URLs with a provider detector library into TrackerEvents.
+- Normalize and dedupe into AuditEvents; compute leaks (events seen after opt-out).
+- Include CMPs found by the autoconsent collector.
+
+Conceptual architecture
+- Server: `src/app` (Fastify route `src/app/routes/scan.ts` validates input and calls runScan)
+- Analysis: `src/analysis/scan.ts` orchestrates two crawls, staging, parsing, normalization, summary
+- Crawl: `src/analysis/crawl` (Puppeteer launch and per-run logic). Consent collector integrates DuckDuckGo autoconsent via CDP isolated worlds
+- Parsing: `src/analysis/parse` (detector registry; converts URLs to TrackerEvents)
+- Schema: `src/schema` (types and Zod validators)
+- Utils: `src/utils` (hashing, URL canonicalization)
+
+Data flow in short
+1) /scan → runScan(url)
+2) runScan → Promise.all(crawlOne(url, 'optOut'), crawlOne(url, 'optIn'))
+3) Each crawl collects requests and CMP results; actionTimestamp records consent time
+4) Partition requests by stage
+5) Parse requests → TrackerEvents → merge to AuditEvents (stable hash)
+6) Build trackers, leaks, checklist, summary
+
+Testing
+- Run tests: `npm test`
+- Tests include unit and integration with mocked crawl outputs
+
+Linting / Typechecking / Build
+- Lint: `npm run lint`
+- Typecheck: `npm run typecheck`
+- Build: `npm run build`
+
+CI
+- GitHub Actions workflow `.github/workflows/ci.yml` runs install, lint, typecheck, build, and tests on PRs and pushes.
+
+Notes
+- The service captures all requests (not just third-party)
+- CMP detection leverages DuckDuckGo autoconsent; injection is done in an isolated world using CDP
+- Event dedupe hash is based on provider key + canonicalized URL parts
+- See inline TODOs (e.g., in `src/analysis/scan.ts`) for future improvements (logger, timings, structure)
 
 

@@ -1,4 +1,10 @@
 import { randomUUID } from 'crypto';
+// TODO: This module is doing too much. Split into smaller files/modules:
+// - crawl orchestration (runScan)
+// - request staging (partitionRequests)
+// - event normalization/dedup (buildNormalizedEventsAndTrackers)
+// - summaries/checklists (buildChecklist)
+// - CMP mapping (buildCmpsArray)
 import { crawlOne } from './crawl/crawlOne.js';
 import { parseRequests } from './parse/parser.js';
 import type {
@@ -10,6 +16,7 @@ import type {
   ProviderInfo,
   Tracker,
   TrackerEvent,
+  Cmp,
 } from '../schema/types.js';
 import { canonicalizeUrl } from '../utils/url.js';
 import { sha1 } from '../utils/hash.js';
@@ -19,24 +26,29 @@ type StagedRequest = CrawlRequestRecord & {
   stage: 'preConsent' | 'afterOptOut' | 'afterOptIn';
 };
 
-export async function runScan(
-  url: string,
-  autoconsentAction: 'optIn' | 'optOut' | null = null,
-): Promise<ApiResponseV1> {
+export async function runScan(url: string): Promise<ApiResponseV1> {
   const runId = randomUUID();
   const startedAt = Date.now();
 
-  // For now, run crawls in parallel. A more sophisticated staged crawl might be sequential.
+  // Run both crawls in parallel, each with their respective consent action
   const [optOut, optIn] = await Promise.all([
-    crawlOne(url, 'optOut', autoconsentAction),
-    crawlOne(url, 'optIn', autoconsentAction),
+    crawlOne(url, 'optOut', 'optOut'), // Always opt-out in optOut mode
+    crawlOne(url, 'optIn', 'optIn'), // Always opt-in in optIn mode
   ]);
+
+  // TODO: Replace console.log with a structured logger (debug levels, correlation IDs)
+  console.log('DEBUG: optOut requests:', optOut.requests.length);
+  console.log('DEBUG: optIn requests:', optIn.requests.length);
 
   const allRequests: StagedRequest[] = [];
   partitionRequests(optOut, 'optOut').forEach((r) => allRequests.push(r));
   partitionRequests(optIn, 'optIn').forEach((r) => allRequests.push(r));
 
+  // TODO: capture per-stage timings here for the summary.timingsMs
+  console.log('DEBUG: allRequests staged:', allRequests.length);
+
   const allTrackerEvents = parseRequests(allRequests);
+  console.log('DEBUG: trackerEvents found:', allTrackerEvents.length);
 
   const { events, trackers } =
     buildNormalizedEventsAndTrackers(allTrackerEvents);
@@ -54,14 +66,14 @@ export async function runScan(
       url: url,
       normalizedUrl: optOut.finalUrl || url,
       domain: getDomain(optOut.finalUrl || url) || '',
-      locale: 'EU', // Placeholder
-      jurisdiction: 'GDPR', // Placeholder
+      locale: 'EU', // TODO: Detect locale/region from IP or configuration
+      jurisdiction: 'GDPR', // TODO: Resolve from locale + product config
       userAgent: optOut.meta.userAgent || '',
-      viewport: { width: 1366, height: 768 }, // Placeholder
-      gpcEnabled: false, // Placeholder
+      viewport: { width: 1366, height: 768 }, // TODO: Use actual viewport from crawler options
+      gpcEnabled: false, // TODO: Wire through GPC setting from crawler/page
     },
     summary: {
-      // Placeholder for now
+      // TODO: Compute real verdict from staged events (preConsent/leaks/etc.)
       verdict: 'pass',
       reasons: [],
       totals: {
@@ -76,15 +88,15 @@ export async function runScan(
         startedAt,
         endedAt,
         total: endedAt - startedAt,
-        preConsentObserve: 0,
-        cmpDetect: 0,
-        optOutAction: 0,
-        postOptOutObserve: 0,
-        optInAction: 0,
-        postOptInObserve: 0,
+        preConsentObserve: 0, // TODO: Measure using crawl budgets/timestamps
+        cmpDetect: 0, // TODO: Populate from collector timing
+        optOutAction: 0, // TODO: Populate from action timestamps
+        postOptOutObserve: 0, // TODO: Measure explicitly
+        optInAction: 0, // TODO: Populate from action timestamps
+        postOptInObserve: 0, // TODO: Measure explicitly
       },
     },
-    cmps: [], // Placeholder for now
+    cmps: buildCmpsArray(optOut.cookiePopups?.cmps, optIn.cookiePopups?.cmps),
     trackers,
     events,
     leaks,
@@ -317,6 +329,45 @@ function buildChecklist(
     verdict,
     notes: [],
   };
+}
+
+function buildCmpsArray(
+  optOutCmps: any[] | undefined,
+  optInCmps: any[] | undefined,
+): Cmp[] {
+  const cmps: Cmp[] = [];
+  const processed = new Set<string>();
+
+  // Process CMPs from both crawls, preferring opt-out data
+  const allCmps = [...(optOutCmps || []), ...(optInCmps || [])];
+
+  for (const cmp of allCmps) {
+    if (!cmp.name || processed.has(cmp.name)) continue;
+    processed.add(cmp.name);
+
+    cmps.push({
+      name: cmp.name,
+      ruleKey: cmp.name.toLowerCase().replace(/\s+/g, '_'),
+      detected: true,
+      cosmetic: false, // We don't have this info yet
+      firstLayerRejectAll: false, // We don't have this info yet
+      secondLayerOnly: false,
+      detectedAtMs: 0, // We don't have timing info yet
+      handledAtMs: 0, // We don't have timing info yet
+      consent: {
+        tcf: {
+          enabled: false,
+        },
+        gpp: {
+          enabled: false,
+        },
+      },
+    });
+  }
+
+  // Strictly use the DuckDuckGo autoconsent collector output only
+
+  return cmps;
 }
 
 function countVendors(

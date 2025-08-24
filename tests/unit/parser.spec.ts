@@ -13,10 +13,10 @@ describe('parseRequests', () => {
     expect(parseRequests([])).toEqual([]);
   });
 
-  it('detects GA4', () => {
-    const requests = [{ ...baseRequest, url: 'https://www.google-analytics.com/g/collect?v=2' }];
+  it('detects GTM via /gtm.js', () => {
+    const requests = [{ ...baseRequest, url: 'https://www.googletagmanager.com/gtm.js?id=GTM-XYZ' }];
     const events = parseRequests(requests);
-    expect(events.some(e => e.providerKey === 'GOOGLEANALYTICS4')).toBe(true);
+    expect(events.some(e => e.providerKey === 'GOOGLETAGMAN')).toBe(true);
   });
 });
 

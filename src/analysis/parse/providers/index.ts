@@ -17,6 +17,7 @@ function buildDetectorFromProvider(p: any): DetectorFn {
       const details: Record<string, string | number | boolean | null> = {};
 
       // Provider metadata
+      // TODO: Tighten provider typing and avoid magic __keys (use nested objects)
       if (res.provider.name) details['__provider.name'] = res.provider.name;
       if (res.provider.type) details['__provider.type'] = res.provider.type;
       if (res.provider.key) details['__provider.key'] = res.provider.key;
@@ -35,6 +36,7 @@ function buildDetectorFromProvider(p: any): DetectorFn {
       }
 
       // All provider data entries with full context preserved
+      // TODO: Consider size limits and redaction for potentially sensitive values
       for (const d of res.data as any[]) {
         if (!d || typeof d !== 'object' || !('key' in d)) continue;
         const key = String(d.key);

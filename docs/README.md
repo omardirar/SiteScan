@@ -1,9 +1,9 @@
-# Website Auditor Documentation
+# Website Auditor Docs
 
-Welcome to the Website Auditor documentation. This folder describes system architecture, APIs, configuration, development workflow, testing, and troubleshooting.
+This documentation covers the system architecture, API shape, development workflow, testing, and troubleshooting.
 
-- See `architecture/` for a deep dive into modules and data flow.
-- See `api/` for HTTP API schemas and examples.
-- See `config/` for environment variables and runtime knobs.
-- See `dev/` for running locally, debugging, and coding standards.
-- See `troubleshooting/` for common issues and resolutions.
+- Architecture: `architecture/overview.md`
+- API: `api/scan.md`
+- Dev: `dev/getting-started.md`
+- Config: `config/timeouts.md`
+- Troubleshooting: `troubleshooting/cmp.md`

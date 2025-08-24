@@ -1,50 +1,29 @@
 # /scan API
 
-POST /scan accepts JSON and returns a versioned, aggregated analysis for a given URL.
-
-## Request body:
+POST /scan
+- Content-Type: application/json
+- Body:
 ```json
-{
-  "url": "https://example.com",
-  "autoconsentAction": "optOut"
-}
-```
-- `autoconsentAction` (optional): "optIn" | "optOut". If provided, the CookiePopupsCollector will trigger the requested action.
-
-## Response body (v1.0):
-See `src/schema/types.ts` for the canonical `ApiResponseV1` interface and `src/schema/validator.ts` for the Zod schema.
-
-A high-level overview:
-```jsonc
-{
-  "schemaVersion": "1.0",
-  "run": { /* RunMeta object */ },
-  "summary": { /* Summary object */ },
-  "cmps": [ /* Cmp[] object */ ],
-  "trackers": [ /* Tracker[] object */ ],
-  "events": [ /* AuditEvent[] object */ ],
-  "leaks": [ /* AuditEvent[] object */ ],
-  "checklist": { /* Checklist object */ }
-}
+{ "url": "https://example.com" }
 ```
 
-### Key Object Shapes
+Response (v1.0)
+- `schemaVersion`: "1.0"
+- `run`: Run metadata (`id`, `url`, `normalizedUrl`, `domain`, `locale`, `jurisdiction`, `userAgent`, `viewport`, `gpcEnabled`)
+- `summary`: verdict, reasons, counts per stage, timings
+- `cmps`: CMP array detected by the autoconsent collector
+- `trackers`: unique providers derived from events
+- `events`: deduped tracker events with stage presence and data
+- `leaks`: subset of `events` where `stages.afterOptOut` is true
+- `checklist`: staged reporting-friendly output
 
-- **RunMeta**: `id`, `url`, `normalizedUrl`, `domain`, `locale`, `jurisdiction`, `userAgent`, `viewport`, `gpcEnabled`.
-- **Summary**: `verdict`, `reasons`, `totals` (counts for events, providers, stages), `timingsMs` (detailed performance timings).
-- **Cmp**: `name`, `ruleKey`, `detected`, `cosmetic`, `firstLayerRejectAll`, timings, `consent` snapshots (TCF/GPP).
-- **Tracker**: Normalized unique provider info: `{ name, key, type }`.
-- **AuditEvent**: Deduped event with `id`, `hash`, `timestamp`, `stage`, `stages` (booleans for preConsent, afterOptOut, afterOptIn), `leak` flag, `request`/`response` info, `provider` details, and `data` parameters.
-- **Checklist**: Staged results for reporting: `preConsent`, `popup`, `afterOptOut`, `afterOptIn`, `trackers`.
-
-### Semantics
-
-- **Staging**: Events are bucketed into `preConsent`, `afterOptOut`, or `afterOptIn` based on when they occurred relative to the consent action.
-- **Deduplication**: `events` are deduped using a stable hash of `provider.key | host | path | sortedQueryString`.
-- **Leaking**: `leaks` is a subset of `events` where `stages.afterOptOut` is true.
-
-## Example request:
+Example
 ```bash
 curl -s localhost:3000/scan -H 'content-type: application/json' \
-  -d '{"url":"https://example.com","autoconsentAction":"optOut"}'
+  -d '{"url":"https://example.com"}' | jq '{cmps:(.cmps|length), trackers:(.trackers|length), events:(.events|length), leaks:(.leaks|length)}'
 ```
+
+Semantics
+- Staging is computed using the action timestamp from the CMP collector.
+- Deduplication uses provider key + canonical URL host/path/sorted query.
+- Leaks indicate non-compliance after an opt-out.

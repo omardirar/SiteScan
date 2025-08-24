@@ -1,35 +1,26 @@
 # Architecture Overview
 
-The Website Auditor consists of:
+The Website Auditor service orchestrates two page crawls (opt-out, opt-in), partitions network activity into stages using consent action timestamps, converts matching requests into tracker events via a provider library, deduplicates them, and produces a versioned API response.
 
-- **Server (`src/app`)**: A Fastify server that handles HTTP requests, validation, and routing.
-- **Analysis (`src/analysis`)**: The core orchestration layer. It runs crawls, partitions requests into stages (pre-consent, post-consent), parses them into tracker events, performs deduplication, and builds the final `ApiResponseV1`.
-- **Crawling (`src/analysis/crawl`)**: A Puppeteer-based crawler responsible for navigating pages, capturing network requests, and interacting with CMPs via the `@duckduckgo/autoconsent` library.
-- **Parsing (`src/analysis/parsing`)**: A library of provider definitions that normalizes raw network requests into structured `TrackerEvent` objects.
-- **Schema (`src/schema`)**: Centralized TypeScript types and Zod validators for the API contracts, ensuring type safety and data integrity.
-- **Utilities (`src/utils`)**: Shared helper functions for tasks like hashing and URL canonicalization.
+Modules
+- Server (`src/app`): Fastify server, routing, input validation.
+- Analysis (`src/analysis`): Orchestrates crawling, staging, parsing, normalization, summary.
+- Crawl (`src/analysis/crawl`): Puppeteer launch and per-run logic; consent collector integrating DuckDuckGo autoconsent in an isolated world via CDP.
+- Parsing (`src/analysis/parse`): Detector registry that maps URLs to provider-specific events.
+- Schema (`src/schema`): Types and Zod validators for the `ApiResponseV1` contract.
+- Utils (`src/utils`): URL canonicalization and hashing.
 
-## High-level Flow
+Flow
+1. Client POSTs `/scan` with `{ url }`.
+2. `runScan(url)` executes two crawls in parallel: one with autoconsent opt-out, another opt-in.
+3. Each crawl collects network requests (timestamped) and CMP results from the collector.
+4. Requests are partitioned into stages based on the recorded action timestamp.
+5. URLs are parsed through the provider library to generate `TrackerEvent`s.
+6. Tracker events are normalized and deduplicated into `AuditEvent`s, which indicate presence across stages and whether the event leaked after opt-out.
+7. Response includes run meta, summary, CMPs, trackers, events, leaks, and a checklist.
 
-1.  **POST `/scan`**: The server receives a request with a URL and an optional `autoconsentAction`.
-2.  **`runScan` Orchestration**:
-    - Two parallel crawls are initiated: one for `optOut` and one for `optIn`.
-    - Each `crawlOne` process launches Puppeteer, navigates to the URL, and injects the CMP collector.
-    - Network requests are captured with high-resolution timestamps.
-    - If a CMP is detected and an action is specified, the collector performs the opt-out/opt-in. The timestamp of this action is recorded.
-3.  **Staging**: Requests from both crawls are partitioned into three stages: `preConsent`, `afterOptOut`, and `afterOptIn`, based on their timestamps relative to the consent action.
-4.  **Parsing**: All staged requests are processed by the provider library to identify tracker events.
-5.  **Normalization & Deduplication**:
-    - Tracker events are deduplicated using a stable hash (`provider.key | host | path | sortedQueryString`).
-    - A single `AuditEvent` is created for each unique hash, aggregating its presence across all stages.
-6.  **Response Generation**: The final `ApiResponseV1` object is assembled, including run metadata, a summary, CMP details, normalized trackers, staged audit events, leaks, and a checklist.
-
-## Data Model
-
-The data model is defined in `src/schema/types.ts`. Key interfaces include:
-- `ApiResponseV1`: The top-level response object.
-- `AuditEvent`: A normalized, deduplicated tracking event with staging information.
-- `Tracker`: A unique, normalized provider.
-- `Checklist`: A report-friendly summary of findings across stages.
-
-See `../api/scan.md` for more detailed schemas.
+Key Concepts
+- Staging: preConsent, afterOptOut, afterOptIn.
+- Deduplication: Provider key + canonicalized URL host/path/sorted query.
+- Leaks: Events observed after an opt-out action.
+- CMPs: From the autoconsent collector (no heuristic fallback).
