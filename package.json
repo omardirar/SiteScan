@@ -3,32 +3,39 @@
   "version": "0.1.0",
   "description": "Lightweight tracker audit API: per-URL scan with optOut/optIn crawls, auto-consent, third-party filtering, and minimal tracker parsing.",
   "type": "module",
-  "main": "dist/server/index.js",
+  "main": "dist/app/index.js",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "tsx src/server/index.ts",
+    "dev": "tsx src/app/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server/index.js",
+    "start": "node dist/app/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "crawl:providers": "tsx scripts/crawl-providers.ts"
+    "lint": "eslint 'src/**/*.ts'",
+    "format": "prettier --write 'src/**/*.ts'"
   },
   "dependencies": {
+    "@duckduckgo/autoconsent": "^14.15.0",
     "fastify": "^4.28.1",
     "puppeteer": "^24.7.1",
     "tldts": "^7.0.4",
-    "zod": "^3.25.32",
-    "@duckduckgo/autoconsent": "^4.28.0"
+    "zod": "^3.25.32"
   },
   "devDependencies": {
     "@types/node": "^20.16.5",
+    "@typescript-eslint/eslint-plugin": "^8.40.0",
+    "@typescript-eslint/parser": "^8.40.0",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
     "tsx": "^4.19.1",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.40.0",
     "vitest": "^1.6.0"
   }
 }
-
-

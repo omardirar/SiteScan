@@ -2,43 +2,34 @@
 
 The Website Auditor consists of:
 
-- Server (Fastify): `src/server/index.ts`, routes under `src/server/routes/`
-- Core Orchestration: `src/core/scan.ts` which runs two crawls (opt-out and opt-in) and produces a normalized aggregate (`ApiResponse`)
-- Crawler: `src/crawl/` (Puppeteer-based) with:
-  - `engine/browser.ts`: Chromium flags and launcher (Cloud Run friendly)
-  - `crawlOne.ts`: executes a single crawl with request capture, CMP collection, and budgets
-  - `collectors/`: `CookiePopupsCollector` for CMP detection/scraping/actions
-  - `cdp/`: helper utilities (isolated worlds, runtime bindings)
-  - `content-scripts/`: loader for `@duckduckgo/autoconsent`
-- Parsing: `src/parse/` (provider library and registry) that normalizes network requests to provider events
+- **Server (`src/app`)**: A Fastify server that handles HTTP requests, validation, and routing.
+- **Analysis (`src/analysis`)**: The core orchestration layer. It runs crawls, partitions requests into stages (pre-consent, post-consent), parses them into tracker events, performs deduplication, and builds the final `ApiResponseV1`.
+- **Crawling (`src/analysis/crawl`)**: A Puppeteer-based crawler responsible for navigating pages, capturing network requests, and interacting with CMPs via the `@duckduckgo/autoconsent` library.
+- **Parsing (`src/analysis/parsing`)**: A library of provider definitions that normalizes raw network requests into structured `TrackerEvent` objects.
+- **Schema (`src/schema`)**: Centralized TypeScript types and Zod validators for the API contracts, ensuring type safety and data integrity.
+- **Utilities (`src/utils`)**: Shared helper functions for tasks like hashing and URL canonicalization.
 
 ## High-level Flow
 
-1. Server receives POST /scan { url, autoconsentAction }
-2. `scanUrl` runs two crawls in parallel (optOut & optIn):
-   - Launch Chromium (Puppeteer)
-   - Start `CookiePopupsCollector` (bind CDP, create isolated worlds per frame, inject content script)
-   - Navigate to the target URL
-   - Start request capture (filtering first/third-party happens later during parse)
-   - Collector scrapes frames and waits for CMP messages; if action requested and popup found, triggers opt-out/opt-in
-   - Merge outputs: requests + `cookiePopups.cmps`
-3. Parse requests via provider registry into `TrackerEvent`s
-4. Deduplicate and build `AuditEvent`s with `seenInOptIn/seenInOptOut`
-5. Produce `ApiResponse` { cmps, trackers, events, leaks }
-
-## CMP Collection
-
-- Per-frame isolated world created with `Page.createIsolatedWorld`
-- `Runtime.addBinding` bridges content script messages back to the collector
-- `@duckduckgo/autoconsent` content script injected with a wrapper to forward messages via the binding
-- Messages handled: init, cmpDetected, popupFound, report, optInResult/optOutResult, autoconsentDone, selfTestResult, eval, autoconsentError
-- Config enables filter-list and heuristic detection; timeboxes for scraping, detection, and action
+1.  **POST `/scan`**: The server receives a request with a URL and an optional `autoconsentAction`.
+2.  **`runScan` Orchestration**:
+    - Two parallel crawls are initiated: one for `optOut` and one for `optIn`.
+    - Each `crawlOne` process launches Puppeteer, navigates to the URL, and injects the CMP collector.
+    - Network requests are captured with high-resolution timestamps.
+    - If a CMP is detected and an action is specified, the collector performs the opt-out/opt-in. The timestamp of this action is recorded.
+3.  **Staging**: Requests from both crawls are partitioned into three stages: `preConsent`, `afterOptOut`, and `afterOptIn`, based on their timestamps relative to the consent action.
+4.  **Parsing**: All staged requests are processed by the provider library to identify tracker events.
+5.  **Normalization & Deduplication**:
+    - Tracker events are deduplicated using a stable hash (`provider.key | host | path | sortedQueryString`).
+    - A single `AuditEvent` is created for each unique hash, aggregating its presence across all stages.
+6.  **Response Generation**: The final `ApiResponseV1` object is assembled, including run metadata, a summary, CMP details, normalized trackers, staged audit events, leaks, and a checklist.
 
 ## Data Model
 
-- `ProviderInfo` describes a provider (name, key, type) with declared columns and groups (from the provider library)
-- `EventDataItem[]` stores provider parameters with optional field/group/hidden metadata
-- `AuditEvent` ties a network event to provider info and adds seen flags
-- `NormalizedTracker` is a compact provider identity
+The data model is defined in `src/schema/types.ts`. Key interfaces include:
+- `ApiResponseV1`: The top-level response object.
+- `AuditEvent`: A normalized, deduplicated tracking event with staging information.
+- `Tracker`: A unique, normalized provider.
+- `Checklist`: A report-friendly summary of findings across stages.
 
-See `../api/scan.md` for schemas.
+See `../api/scan.md` for more detailed schemas.
