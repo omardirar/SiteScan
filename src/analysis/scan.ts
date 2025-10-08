@@ -53,11 +53,18 @@ export async function runScan(url: string): Promise<ApiResponseV1> {
   const { events, trackers } =
     buildNormalizedEventsAndTrackers(allTrackerEvents);
 
+  console.log('DEBUG: normalized events:', events.length);
+  console.log('DEBUG: normalized trackers:', trackers.length);
+
   const leaks = events.filter((e) => e.leak);
 
   const endedAt = Date.now();
 
-  const checklist = buildChecklist(url, 'EU', events);
+  const cmps = buildCmpsArray(
+    optOut.cookiePopups?.cmps,
+    optIn.cookiePopups?.cmps,
+  );
+  const checklist = buildChecklist(url, 'EU', events, cmps);
 
   const response: ApiResponseV1 = {
     schemaVersion: '1.0',
@@ -96,7 +103,7 @@ export async function runScan(url: string): Promise<ApiResponseV1> {
         postOptInObserve: 0, // TODO: Measure explicitly
       },
     },
-    cmps: buildCmpsArray(optOut.cookiePopups?.cmps, optIn.cookiePopups?.cmps),
+    cmps,
     trackers,
     events,
     leaks,
@@ -279,6 +286,7 @@ function buildChecklist(
   url: string,
   locale: string,
   events: AuditEvent[],
+  cmps: Cmp[],
 ): ApiResponseV1['checklist'] {
   const preConsentEvents = events.filter((e) => e.stages.preConsent);
   const afterOptOutEvents = events.filter((e) => e.stages.afterOptOut);
@@ -302,13 +310,13 @@ function buildChecklist(
         vendors: preConsentVendors,
       },
       popup: {
-        // Placeholder
-        pass: true,
-        cmp: 'Unknown',
-        firstLayerRejectAll: false,
-        cosmetic: false,
-        appearedAtMs: 0,
-        handledAtMs: 0,
+        pass: cmps.length > 0,
+        cmp: cmps.length > 0 ? cmps[0].name : 'Unknown',
+        firstLayerRejectAll:
+          cmps.length > 0 ? cmps[0].firstLayerRejectAll : false,
+        cosmetic: cmps.length > 0 ? cmps[0].cosmetic : false,
+        appearedAtMs: cmps.length > 0 ? cmps[0].detectedAtMs : 0,
+        handledAtMs: cmps.length > 0 ? cmps[0].handledAtMs : 0,
       },
       afterOptOut: {
         pass: afterOptOutEvents.length === 0,
