@@ -1,0 +1,329 @@
+{
+  "$id": "https://yourdomain.example/schemas/auditor/2.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Website Auditor Run (v2.0)",
+  "type": "object",
+  "required": ["schemaVersion", "meta", "run", "data", "errors", "report"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+
+    "meta": {
+      "type": "object",
+      "required": ["createdAt", "environment", "timezone"],
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "auditorVersion": { "type": "string" },
+        "environment": { "type": "string", "enum": ["production","staging","development","test"] },
+        "region": { "type": "string" },
+        "timezone": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "run": {
+      "type": "object",
+      "required": [
+        "id","url","normalizedUrl","domain","locale","jurisdiction",
+        "regulatoryRegions","userAgent","viewport","crawlModes"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "url": { "type": "string", "format": "uri" },
+        "normalizedUrl": { "type": "string", "format": "uri" },
+        "domain": { "type": "string" },
+        "locale": { "type": "string", "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+        "jurisdiction": { "type": "string", "enum": ["GDPR","US","Other"] },
+        "regulatoryRegions": { "type": "array", "items": { "type": "string" } },
+        "userAgent": { "type": "string" },
+        "viewport": {
+          "type": "object",
+          "required": ["width","height"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 0 },
+            "height": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "gpcEnabled": { "type": "boolean" },
+        "crawlModes": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["optOut","optIn"] }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "data": {
+      "type": "object",
+      "required": ["cmps","requests"],
+      "properties": {
+        "cmps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name","version","ruleKey","detected","consent"],
+            "properties": {
+              "name": { "type": "string" },
+              "version": { "type": "string" },
+              "ruleKey": { "type": "string" },
+              "detected": { "type": "boolean" },
+              "detectedSelector": { "type": "string" },
+              "cosmetic": { "type": "boolean" },
+              "firstLayerRejectAll": { "type": "boolean" },
+              "secondLayerOnly": { "type": "boolean" },
+              "detectedAtMs": { "type": "integer", "minimum": 0 },
+              "handledAtMs": { "type": "integer", "minimum": 0 },
+              "consent": {
+                "type": "object",
+                "required": ["tcf","gpp"],
+                "properties": {
+                  "tcf": {
+                    "type": "object",
+                    "required": ["enabled"],
+                    "properties": {
+                      "enabled": { "type": "boolean" },
+                      "tcString": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                  },
+                  "gpp": {
+                    "type": "object",
+                    "required": ["enabled"],
+                    "properties": {
+                      "enabled": { "type": "boolean" },
+                      "gppString": { "type": "string" },
+                      "sections": { "type": "array", "items": { "type": "string" } }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id","hash","hashAlgorithm","kind","timestamp","crawlMode","stage",
+              "consentState","thirdParty","resourceType","request","response","network"
+            ],
+            "properties": {
+              "id": { "type": "string" },
+              "hash": { "type": "string" },
+              "hashAlgorithm": { "type": "string", "enum": ["sha256","sha3-256"] },
+              "kind": { "type": "string", "enum": ["webRequest"] },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "crawlMode": { "type": "string", "enum": ["optOut","optIn"] },
+              "stage": { "type": "string", "enum": ["preConsent","afterOptIn","afterReject"] },
+              "consentState": { "type": "string", "enum": ["denied","granted","notApplicable"] },
+              "thirdParty": { "type": "boolean" },
+              "resourceType": {
+                "type": "string",
+                "enum": ["script","img","image","css","xmlhttprequest","fetch","beacon","iframe","font","other"]
+              },
+              "provider": {
+                "type": "object",
+                "properties": {
+                  "key": { "type": "string" },
+                  "name": { "type": "string" },
+                  "type": { "type": "string" }
+                },
+                "additionalProperties": false
+              },
+              "parameters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["key","value","type","source","sensitivity"],
+                  "properties": {
+                    "key": { "type": "string" },
+                    "field": { "type": "string" },
+                    "value": {},
+                    "group": { "type": "string" },
+                    "type": { "type": "string", "enum": ["string","number","boolean"] },
+                    "source": { "type": "string", "enum": ["query","body","header","derived"] },
+                    "sensitivity": { "type": "string", "enum": ["low","medium","high"] }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "request": {
+                "type": "object",
+                "required": ["method","url","host","path"],
+                "properties": {
+                  "method": { "type": "string" },
+                  "url": { "type": "string", "format": "uri" },
+                  "host": { "type": "string" },
+                  "path": { "type": "string" },
+                  "referrer": { "type": "string", "format": "uri" },
+                  "initiatorType": { "type": "string" }
+                },
+                "additionalProperties": false
+              },
+              "response": {
+                "type": "object",
+                "required": ["status","mime","sizeBytes"],
+                "properties": {
+                  "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+                  "mime": { "type": "string" },
+                  "sizeBytes": { "type": "integer", "minimum": 0 },
+                  "setCookieNames": { "type": "array", "items": { "type": "string" } },
+                  "readCookieNames": { "type": "array", "items": { "type": "string" } }
+                },
+                "additionalProperties": false
+              },
+              "network": {
+                "type": "object",
+                "required": ["protocolName","protocolVersion"],
+                "properties": {
+                  "protocolName": { "type": "string", "enum": ["http","https","ws","wss"] },
+                  "protocolVersion": { "type": "string", "enum": ["1.1","2","3"] }
+                },
+                "additionalProperties": false
+              },
+              "userAgent": {
+                "type": "object",
+                "properties": { "original": { "type": "string" } },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "errors": { "type": "array", "items": { "type": "object" } },
+
+    "report": {
+      "type": "object",
+      "required": ["summary", "violations", "warnings", "wins"],
+      "properties": {
+        "summary": {
+          "type": "object",
+          "required": ["violations","warnings","wins"],
+          "properties": {
+            "violations": { "type": "integer", "minimum": 0 },
+            "warnings":   { "type": "integer", "minimum": 0 },
+            "wins":       { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ReportItemViolation" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ReportItemWarning" }
+        },
+        "wins": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ReportItemWin" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "$defs": {
+    "ReportSubject": {
+      "oneOf": [
+        { "$ref": "#/$defs/SubjectRequest" },
+        { "$ref": "#/$defs/SubjectCmp" },
+        { "$ref": "#/$defs/SubjectPage" },
+        { "$ref": "#/$defs/SubjectRun" }
+      ]
+    },
+
+    "SubjectRequest": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "request" },
+        "requestId": { "type": "string" }
+      },
+      "required": ["kind","requestId"],
+      "additionalProperties": false
+    },
+
+    "SubjectCmp": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "cmp" },
+        "cmpRuleKey": { "type": "string" },
+        "cmpIndex": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["kind","cmpRuleKey"],
+      "additionalProperties": false
+    },
+
+    "SubjectPage": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "page" },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "required": ["kind","url"],
+      "additionalProperties": false
+    },
+
+    "SubjectRun": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "run" },
+        "runId": { "type": "string", "format": "uuid" }
+      },
+      "required": ["kind","runId"],
+      "additionalProperties": false
+    },
+
+    "BaseReportItem": {
+      "type": "object",
+      "required": ["code","message","subject"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string" },
+        "docs": { "type": "string", "format": "uri" },
+        "evidence": { "type": "object", "additionalProperties": true },
+        "subject": { "$ref": "#/$defs/ReportSubject" }
+      },
+      "additionalProperties": false
+    },
+
+    "ReportItemViolation": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseReportItem" },
+        {
+          "type": "object",
+          "properties": {
+            "severity": { "type": "string", "enum": ["low","medium","high","critical"] }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "ReportItemWarning": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseReportItem" }
+      ]
+    },
+
+    "ReportItemWin": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseReportItem" }
+      ]
+    }
+  },
+
+  "additionalProperties": false
+}
