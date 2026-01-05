@@ -1,4 +1,4 @@
-# Leak Lens - A Site Auditor
+# SiteScan - A Web Audit API
 
 A lightweight Node.js + TypeScript service that scans a single URL in a headless browser, performs staged consent actions, analyzes network traffic, detects trackers via a provider library, and returns a versioned JSON report.
 
