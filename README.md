@@ -1,4 +1,4 @@
-# Website Auditor (API)
+# Leak Lens - A Site Auditor
 
 A lightweight Node.js + TypeScript service that scans a single URL in a headless browser, performs staged consent actions, analyzes network traffic, detects trackers via a provider library, and returns a versioned JSON report.
 
